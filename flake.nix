@@ -4,8 +4,9 @@
   description = "Software to simulate heat transfer for additive manufacturing";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
-    utils.url   = "github:numtide/flake-utils";
+    nixpkgs.url  = github:nixos/nixpkgs/nixos-24.11;
+    utils.url    = github:numtide/flake-utils;
+    appimage.url = github:ralismark/nix-appimage;
   };
 
   outputs = inputs @ { self, utils, ... }: utils.lib.eachDefaultSystem (system: rec {
@@ -18,7 +19,7 @@
 
     lib = with config; {
       callPackage = set: pkgs.lib.callPackageWith (pkgs // set);
-    };
+    } // pkgs.lib;
 
     derivations = with config; rec {
       callPackage = lib.callPackage libs;
@@ -46,11 +47,23 @@
             src     = self;
           };
 
+          devel-appimage = inputs.appimage.lib.${system}.mkAppImage {
+            program = lib.getExe versions.devel;
+          };
+
           stable = v100;
+
+          stable-appimage = inputs.appimage.lib.${system}.mkAppImage {
+            program = lib.getExe versions.stable;
+          };
 
           v100 = callPackage ./nix/adamantine/v1.0.0.nix {
             inherit callPackage;
             dealii = libs.dealii.versions.v952;
+          };
+
+          v100-appimage = inputs.appimage.lib.${system}.mkAppImage {
+            program = lib.getExe versions.v100;
           };
         };
       in (versions.devel) // {
@@ -60,6 +73,8 @@
 
     packages = rec {
       default = adamantine.versions.devel;
+
+      appimage = adamantine.versions.devel-appimage;
 
       inherit (derivations) adamantine;
     };
@@ -74,7 +89,7 @@
           git
           clang-tools
           ninja
-        ] ++ pkgs.lib.optionals (pkgs.stdenv.hostPlatform.isLinux) [
+        ] ++ lib.optionals (pkgs.stdenv.hostPlatform.isLinux) [
           gdb
           cntr
         ] ++ self.outputs.packages.${system}.default.buildInputs
@@ -94,7 +109,7 @@
         ];
 
         # Ensure the locales point at the correct archive location.
-        LOCALE_ARCHIVE = pkgs.lib.optional (pkgs.stdenv.hostPlatform.isLinux) (
+        LOCALE_ARCHIVE = lib.optional (pkgs.stdenv.hostPlatform.isLinux) (
           "${pkgs.glibcLocales}/lib/locale/locale-archive"
         );
       };
